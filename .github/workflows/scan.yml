@@ -4,6 +4,8 @@ on:
   schedule:
     # 13:45 UTC = 19:15 IST, Mon-Fri (bhavcopy publishes ~18:30-19:00 IST)
     - cron: "45 13 * * 1-5"
+    # 02:30 UTC = 08:00 IST, Mon-Fri (morning catch-up before market open)
+    - cron: "30 2 * * 1-5"
   workflow_dispatch: {}
 
 permissions:
@@ -37,6 +39,7 @@ jobs:
         run: |
           git config user.name "scan-bot"
           git config user.email "actions@github.com"
+          git pull --rebase
           git add docs/index.html
           git diff --cached --quiet || git commit -m "Scan $(date -u +%F)"
           git push
