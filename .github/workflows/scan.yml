@@ -1,0 +1,42 @@
+name: NSE 4pct scan
+
+on:
+  schedule:
+    # 13:45 UTC = 19:15 IST, Mon-Fri (bhavcopy publishes ~18:30-19:00 IST)
+    - cron: "45 13 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore bhavcopy cache
+        uses: actions/cache@v4
+        with:
+          path: nse_cache
+          key: nse-cache-${{ github.run_id }}
+          restore-keys: |
+            nse-cache-
+
+      - name: Install dependencies
+        run: pip install pandas requests pyarrow
+
+      - name: Run scan
+        run: python nse_4pct_scan.py --out docs/index.html
+
+      - name: Commit dashboard
+        run: |
+          git config user.name "scan-bot"
+          git config user.email "actions@github.com"
+          git add docs/index.html
+          git diff --cached --quiet || git commit -m "Scan $(date -u +%F)"
+          git push
