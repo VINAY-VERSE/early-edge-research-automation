@@ -27,6 +27,10 @@ jobs:
         run: |
           python bse_collector.py
 
+      - name: Filter BSE announcements
+        run: |
+          python announcement_filter.py
+
       - name: Save BSE data
         run: |
           git config user.name "research-bot"
