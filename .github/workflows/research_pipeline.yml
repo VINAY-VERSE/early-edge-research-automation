@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -31,10 +32,17 @@ jobs:
         run: |
           python announcement_filter.py
 
+      - name: Generate research feed
+        run: |
+          python research_feed.py
+
       - name: Save BSE data
         run: |
           git config user.name "research-bot"
           git config user.email "actions@github.com"
+
           git add data/
-          git diff --cached --quiet || git commit -m "Update BSE announcements"
+
+          git diff --cached --quiet || git commit -m "Update research feed"
+
           git push
