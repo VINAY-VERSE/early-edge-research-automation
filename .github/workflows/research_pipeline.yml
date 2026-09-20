@@ -32,17 +32,17 @@ jobs:
         run: |
           python announcement_filter.py
 
-      - name: Generate research feed
+      - name: Build research feed
         run: |
           python research_feed.py
 
-      - name: Save BSE data
+      - name: Save pipeline data
         run: |
           git config user.name "research-bot"
           git config user.email "actions@github.com"
 
           git add data/
 
-          git diff --cached --quiet || git commit -m "Update research feed"
+          git diff --cached --quiet || git commit -m "Update research pipeline"
 
           git push
