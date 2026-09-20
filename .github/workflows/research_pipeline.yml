@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  collect:
+  collect-bse:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,7 +17,24 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests feedparser
+        run: pip install feedparser requests
 
-      - name: Test BSE RSS
-        run: python -c "import feedparser; feed=feedparser.parse('BSE_RSS_URL_HERE'); print('Items found:', len(feed.entries)); [print(e.get('title'), e.get('link')) for e in feed.entries[:5]]"
+      - name: Collect BSE announcements
+        run: |
+          python - <<'PY'
+          import feedparser
+
+          url = "https://beta.bseindia.com/data/xml/announcements.xml"
+
+          feed = feedparser.parse(url)
+
+          print(f"Total items found: {len(feed.entries)}")
+          print("=" * 80)
+
+          for item in feed.entries[:10]:
+              print("Company:", item.get("title", ""))
+              print("URL:", item.get("link", ""))
+              print("Date:", item.get("published", ""))
+              print("Description:", item.get("description", ""))
+              print("-" * 80)
+          PY
