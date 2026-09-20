@@ -5,9 +5,11 @@ on:
 
 jobs:
   collect-bse:
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -17,24 +19,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install feedparser requests
+        run: |
+          pip install feedparser requests
 
       - name: Collect BSE announcements
         run: |
-          python - <<'PY'
-          import feedparser
+          python bse_collector.py
 
-          url = "https://beta.bseindia.com/data/xml/announcements.xml"
-
-          feed = feedparser.parse(url)
-
-          print(f"Total items found: {len(feed.entries)}")
-          print("=" * 80)
-
-          for item in feed.entries[:10]:
-              print("Company:", item.get("title", ""))
-              print("URL:", item.get("link", ""))
-              print("Date:", item.get("published", ""))
-              print("Description:", item.get("description", ""))
-              print("-" * 80)
-          PY
+      - name: Upload BSE data
+        uses: actions/upload-artifact@v4
+        with:
+          name: bse-announcements
+          path: data/
