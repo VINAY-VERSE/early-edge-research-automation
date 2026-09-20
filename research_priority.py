@@ -154,57 +154,122 @@ LOW_VALUE_KEYWORDS = [
 # ---------------------------------------------------------
 
 def normalize(text):
-    return re.sub(r"\s+", " ", str(text).lower()).strip()
+    """
+    Convert text to lowercase and normalize whitespace.
+    """
+    return re.sub(
+        r"\s+",
+        " ",
+        str(text).lower()
+    ).strip()
+
+
+def keyword_matches(text, keyword):
+    """
+    Match a keyword as a complete word/phrase.
+
+    This prevents:
+        'loa' from matching 'allocation'
+        'jv' from matching random substrings
+
+    while still allowing phrases such as:
+        'letter of award'
+        'fund raise'
+        'order received'
+    """
+
+    pattern = r"\b" + re.escape(
+        normalize(keyword)
+    ) + r"\b"
+
+    return re.search(
+        pattern,
+        text
+    ) is not None
 
 
 def find_event(headline):
     text = normalize(headline)
 
-    # Remove obvious low-value mutual fund noise
+    # -----------------------------------------------------
+    # LOW-VALUE EVENTS FIRST
+    # -----------------------------------------------------
+
     for keyword in LOW_VALUE_KEYWORDS:
-        if keyword in text:
+
+        if keyword_matches(
+            text,
+            keyword
+        ):
             return "Other", "LOW"
 
-    # High priority events
+    # -----------------------------------------------------
+    # HIGH PRIORITY EVENTS
+    # -----------------------------------------------------
+
     for event_type, keywords in HIGH_PRIORITY.items():
+
         for keyword in keywords:
-            if keyword in text:
+
+            if keyword_matches(
+                text,
+                keyword
+            ):
                 return event_type, "HIGH"
 
-    # Medium priority events
+    # -----------------------------------------------------
+    # MEDIUM PRIORITY EVENTS
+    # -----------------------------------------------------
+
     for event_type, keywords in MEDIUM_PRIORITY.items():
+
         for keyword in keywords:
-            if keyword in text:
+
+            if keyword_matches(
+                text,
+                keyword
+            ):
                 return event_type, "MEDIUM"
 
     return "Other", "LOW"
 
 
-def calculate_research_score(event_type, priority, headline):
+def calculate_research_score(
+    event_type,
+    priority,
+    headline
+):
     """
     Calculate a simple 0-100 research score.
 
-    HIGH priority events start at 70.
-    MEDIUM priority events start at 40.
-    LOW priority events start at 10.
+    HIGH   = 70 base
+    MEDIUM = 40 base
+    LOW    = 10 base
 
-    Additional points are added when the headline
-    contains evidence of materiality such as money,
-    capacity, percentage or volume.
+    Additional points:
+        +15 monetary value
+        +5 capacity / volume
+        +5 percentage
     """
 
     if priority == "HIGH":
+
         score = 70
 
     elif priority == "MEDIUM":
+
         score = 40
 
     else:
+
         score = 10
 
     text = normalize(headline)
 
-    # Monetary value
+    # -----------------------------------------------------
+    # MONETARY VALUE
+    # -----------------------------------------------------
+
     money_patterns = [
         r"₹\s*\d+",
         r"rs\.?\s*\d+",
@@ -216,12 +281,18 @@ def calculate_research_score(event_type, priority, headline):
     ]
 
     if any(
-        re.search(pattern, text)
+        re.search(
+            pattern,
+            text
+        )
         for pattern in money_patterns
     ):
         score += 15
 
-    # Capacity / volume information
+    # -----------------------------------------------------
+    # CAPACITY / VOLUME
+    # -----------------------------------------------------
+
     volume_keywords = [
         "mt",
         "million tonnes",
@@ -233,17 +304,29 @@ def calculate_research_score(event_type, priority, headline):
     ]
 
     if any(
-        keyword in text
+        keyword_matches(
+            text,
+            keyword
+        )
         for keyword in volume_keywords
     ):
         score += 5
 
-    # Percentage information
-    if re.search(r"\d+\s*%", text):
+    # -----------------------------------------------------
+    # PERCENTAGE
+    # -----------------------------------------------------
+
+    if re.search(
+        r"\d+\s*%",
+        text
+    ):
         score += 5
 
-    # Keep score within 0-100
-    return min(score, 100)
+    # Maximum score = 100
+    return min(
+        score,
+        100
+    )
 
 
 # ---------------------------------------------------------
@@ -251,6 +334,7 @@ def calculate_research_score(event_type, priority, headline):
 # ---------------------------------------------------------
 
 if not INPUT_FILE.exists():
+
     raise FileNotFoundError(
         f"Input file not found: {INPUT_FILE}"
     )
@@ -264,10 +348,13 @@ with open(
 ) as f:
 
     reader = csv.DictReader(f)
+
     rows = list(reader)
 
 
-print(f"Rows received: {len(rows)}")
+print(
+    f"Rows received: {len(rows)}"
+)
 
 
 # ---------------------------------------------------------
@@ -278,7 +365,10 @@ output_rows = []
 
 for row in rows:
 
-    headline = row.get("headline", "")
+    headline = row.get(
+        "headline",
+        ""
+    )
 
     event_type, priority = find_event(
         headline
@@ -291,18 +381,66 @@ for row in rows:
     )
 
     output_rows.append({
-        "unique_id": row.get("unique_id", ""),
-        "source": row.get("source", ""),
-        "company": row.get("company", ""),
-        "scrip_code": row.get("scrip_code", ""),
-        "headline": headline,
-        "published_date": row.get("published_date", ""),
-        "url": row.get("url", ""),
-        "event_type": event_type,
-        "priority": priority,
-        "research_score": research_score,
-        "raw_text": row.get("raw_text", ""),
-        "collected_at": row.get("collected_at", ""),
+
+        "unique_id":
+            row.get(
+                "unique_id",
+                ""
+            ),
+
+        "source":
+            row.get(
+                "source",
+                ""
+            ),
+
+        "company":
+            row.get(
+                "company",
+                ""
+            ),
+
+        "scrip_code":
+            row.get(
+                "scrip_code",
+                ""
+            ),
+
+        "headline":
+            headline,
+
+        "published_date":
+            row.get(
+                "published_date",
+                ""
+            ),
+
+        "url":
+            row.get(
+                "url",
+                ""
+            ),
+
+        "event_type":
+            event_type,
+
+        "priority":
+            priority,
+
+        "research_score":
+            research_score,
+
+        "raw_text":
+            row.get(
+                "raw_text",
+                ""
+            ),
+
+        "collected_at":
+            row.get(
+                "collected_at",
+                ""
+            ),
     })
 
 
@@ -323,7 +461,9 @@ output_rows.sort(
             x["priority"],
             3
         ),
+
         -x["research_score"],
+
         x["published_date"]
     )
 )
@@ -336,6 +476,7 @@ output_rows.sort(
 OUTPUT_FILE.parent.mkdir(
     exist_ok=True
 )
+
 
 fieldnames = [
     "unique_id",
@@ -366,7 +507,10 @@ with open(
     )
 
     writer.writeheader()
-    writer.writerows(output_rows)
+
+    writer.writerows(
+        output_rows
+    )
 
 
 # ---------------------------------------------------------
@@ -396,10 +540,26 @@ print("----------------------------------------")
 print("Research priority generated")
 print("----------------------------------------")
 
-print(f"Saved: {OUTPUT_FILE}")
-print(f"HIGH: {high}")
-print(f"MEDIUM: {medium}")
-print(f"LOW: {low}")
+print(
+    f"Saved: {OUTPUT_FILE}"
+)
+
+print(
+    f"HIGH: {high}"
+)
+
+print(
+    f"MEDIUM: {medium}"
+)
+
+print(
+    f"LOW: {low}"
+)
+
+
+# ---------------------------------------------------------
+# SHOW TOP 10
+# ---------------------------------------------------------
 
 print()
 print("Top research items:")
@@ -407,8 +567,28 @@ print("Top research items:")
 for item in output_rows[:10]:
 
     print("----------------------------------------")
-    print("Company:", item["company"])
-    print("Event:", item["event_type"])
-    print("Priority:", item["priority"])
-    print("Score:", item["research_score"])
-    print("Headline:", item["headline"])
+
+    print(
+        "Company:",
+        item["company"]
+    )
+
+    print(
+        "Event:",
+        item["event_type"]
+    )
+
+    print(
+        "Priority:",
+        item["priority"]
+    )
+
+    print(
+        "Score:",
+        item["research_score"]
+    )
+
+    print(
+        "Headline:",
+        item["headline"]
+    )
