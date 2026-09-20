@@ -100,23 +100,34 @@ def is_noise(row):
 
 def announcement_key(row):
     """
-    Create a key for detecting duplicate announcements.
+    Use the BSE document URL as the primary duplicate identifier.
 
-    We primarily use company + headline because the same
-    corporate announcement can appear under multiple
-    security/scrip codes.
+    The same corporate announcement can appear under multiple
+    security codes, so company + headline is not sufficient.
     """
 
-    company = normalize(row.get("company", ""))
+    url = normalize(row.get("url", ""))
 
+    if url:
+        return f"URL|{url}"
+
+    # Fallback if URL is missing
+    company = normalize(row.get("company", ""))
     headline = normalize(row.get("headline", ""))
 
-    # Remove excessive punctuation
-    headline = re.sub(r"[^a-z0-9₹ ]", " ", headline)
+    headline = re.sub(
+        r"[^a-z0-9₹ ]",
+        " ",
+        headline
+    )
 
-    headline = re.sub(r"\s+", " ", headline).strip()
+    headline = re.sub(
+        r"\s+",
+        " ",
+        headline
+    ).strip()
 
-    return f"{company}|{headline}"
+    return f"TEXT|{company}|{headline}"
 
 
 def score_row(row):
