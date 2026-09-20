@@ -8,11 +8,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from html import unescape
 
-
-# ============================================================
-# CONFIG
-# ============================================================
-
 BSE_RSS_URL = "https://beta.bseindia.com/data/xml/announcements.xml"
 
 OUTPUT_DIR = Path("data")
@@ -22,33 +17,25 @@ JSON_FILE = OUTPUT_DIR / "bse_announcements.json"
 CSV_FILE = OUTPUT_DIR / "bse_announcements.csv"
 
 
-# ============================================================
-# HELPERS
-# ============================================================
-
-def clean_text(value):
-    """Remove HTML and normalize whitespace."""
-
-    if not value:
+def clean_html(text):
+    """
+    Remove HTML tags and clean whitespace.
+    """
+    if not text:
         return ""
 
-    value = unescape(str(value))
+    text = unescape(text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text)
 
-    # Remove HTML tags
-    value = re.sub(r"<[^>]+>", " ", value)
-
-    # Normalize whitespace
-    value = re.sub(r"\s+", " ", value)
-
-    return value.strip()
+    return text.strip()
 
 
 def extract_scrip_code(title):
     """
-    Extract six-digit BSE scrip code from:
+    Extract 6-digit BSE scrip code from:
     Company Name (123456)
     """
-
     match = re.search(r"\((\d{6})\)", title)
 
     if match:
@@ -71,77 +58,78 @@ def extract_company_name(title):
     return title.strip()
 
 
-def create_unique_id(url, title, published):
+def extract_headline(title, description):
     """
-    Create a stable ID for an announcement.
+    Remove company name and scrip code from the beginning
+    of the BSE title.
+
+    Example:
+
+    Input:
+        Netweb Technologies India Ltd (543945) - Board Meeting
+
+    Output:
+        Board Meeting
+
+    If the title contains only:
+        Netweb Technologies India Ltd (543945)
+
+    then use the description as fallback.
     """
 
-    value = f"BSE|{url}|{title}|{published}"
+    title = clean_html(title)
+    description = clean_html(description)
+
+    # Remove company name + scrip code from beginning
+    headline = re.sub(
+        r"^.*?\s*\(\d{6}\)\s*[-–—:]?\s*",
+        "",
+        title,
+        count=1
+    ).strip()
+
+    # Remove common separators left at beginning
+    headline = re.sub(
+        r"^[\s\-–—:|]+",
+        "",
+        headline
+    ).strip()
+
+    # If nothing meaningful remains, use description
+    if not headline:
+
+        if description:
+
+            # Try to use the first sentence/line
+            fallback = re.split(
+                r"(?<=[.!?])\s+|\n+",
+                description
+            )[0].strip()
+
+            headline = fallback[:500]
+
+    return headline
+
+
+def create_unique_id(url, title):
+    """
+    Create a stable unique ID for each announcement.
+    """
+
+    value = f"BSE|{url}|{title}"
 
     return hashlib.sha256(
-        value.encode("utf-8")
+        value.encode()
     ).hexdigest()[:16]
 
 
-# ============================================================
-# LOAD EXISTING DATA
-# ============================================================
-
-existing_announcements = []
-
-if JSON_FILE.exists():
-
-    try:
-
-        with open(
-            JSON_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            existing_announcements = json.load(f)
-
-        if not isinstance(existing_announcements, list):
-            existing_announcements = []
-
-    except Exception as e:
-
-        print(
-            f"Warning: Could not read existing JSON: {e}"
-        )
-
-        existing_announcements = []
-
-
-existing_ids = {
-    item.get("unique_id")
-    for item in existing_announcements
-    if item.get("unique_id")
-}
-
-
-print(
-    f"Existing announcements in database: "
-    f"{len(existing_announcements)}"
-)
-
-
-# ============================================================
-# FETCH BSE RSS
-# ============================================================
-
-print("\nFetching BSE RSS feed...")
+print("Fetching BSE RSS feed...")
 
 response = requests.get(
     BSE_RSS_URL,
     timeout=30,
     headers={
-        "User-Agent": (
-            "Mozilla/5.0 "
-            "(Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 "
-            "Chrome/153.0 Safari/537.36"
-        )
+        "User-Agent": "Mozilla/5.0"
     }
 )
 
@@ -149,99 +137,73 @@ response.raise_for_status()
 
 feed = feedparser.parse(response.content)
 
-
 if feed.bozo:
-
-    print(
-        "Warning: RSS feed may contain malformed XML."
-    )
-
+    print("Warning: RSS feed may contain malformed XML.")
 
 entries = feed.entries
 
-print(
-    f"Announcements received from BSE RSS: "
-    f"{len(entries)}"
-)
+print(f"Total announcements found: {len(entries)}")
 
-
-# ============================================================
-# PROCESS ANNOUNCEMENTS
-# ============================================================
-
-new_announcements = []
+announcements = []
 
 
 for entry in entries:
 
-    # --------------------------------------------------------
-    # Raw RSS fields
-    # --------------------------------------------------------
+    title = entry.get("title", "").strip()
 
-    title = clean_text(
-        entry.get("title", "")
-    )
+    url = entry.get("link", "").strip()
 
-    url = clean_text(
-        entry.get("link", "")
-    )
+    description = entry.get(
+        "description",
+        ""
+    ).strip()
 
-    description = clean_text(
-        entry.get("description", "")
-    )
+    published = entry.get(
+        "published",
+        ""
+    ).strip()
 
-    published = clean_text(
-        entry.get("published", "")
-    )
-
-    # Some feeds may use updated instead of published
-    if not published:
-
-        published = clean_text(
-            entry.get("updated", "")
-        )
-
-
-    # --------------------------------------------------------
-    # Company / Scrip
-    # --------------------------------------------------------
+    # -----------------------------------------
+    # COMPANY
+    # -----------------------------------------
 
     company = extract_company_name(title)
 
+    # -----------------------------------------
+    # SCRIP CODE
+    # -----------------------------------------
+
     scrip_code = extract_scrip_code(title)
 
+    # -----------------------------------------
+    # CLEAN HEADLINE
+    # -----------------------------------------
 
-    # --------------------------------------------------------
-    # Unique ID
-    # --------------------------------------------------------
+    headline = extract_headline(
+        title,
+        description
+    )
+
+    # -----------------------------------------
+    # UNIQUE ID
+    # -----------------------------------------
 
     unique_id = create_unique_id(
         url,
-        title,
-        published
+        title
     )
 
+    # -----------------------------------------
+    # COLLECTION TIME
+    # -----------------------------------------
 
-    # --------------------------------------------------------
-    # Capture ALL RSS fields
-    # --------------------------------------------------------
+    collected_at = datetime.now(
+        timezone.utc
+    ).isoformat()
 
-    raw_fields = {}
-
-    for key, value in entry.items():
-
-        if isinstance(value, (str, int, float)):
-
-            raw_fields[key] = clean_text(value)
-
-        else:
-
-            raw_fields[key] = str(value)
-
-
-    # --------------------------------------------------------
-    # Announcement record
-    # --------------------------------------------------------
+    # -----------------------------------------
+    # FINAL RECORD
+    # -----------------------------------------
 
     item = {
 
@@ -253,7 +215,7 @@ for entry in entries:
 
         "scrip_code": scrip_code,
 
-        "headline": title,
+        "headline": headline,
 
         "published_date": published,
 
@@ -261,55 +223,15 @@ for entry in entries:
 
         "raw_text": description,
 
-        "collected_at":
-            datetime.now(timezone.utc).isoformat(),
-
-        "rss_fields": raw_fields
+        "collected_at": collected_at
     }
 
-
-    # --------------------------------------------------------
-    # Add only if new
-    # --------------------------------------------------------
-
-    if unique_id not in existing_ids:
-
-        new_announcements.append(item)
-
-        existing_ids.add(unique_id)
+    announcements.append(item)
 
 
-# ============================================================
-# COMBINE OLD + NEW
-# ============================================================
-
-all_announcements = (
-    existing_announcements +
-    new_announcements
-)
-
-
-# ============================================================
-# SORT BY DATE
-# ============================================================
-
-def sort_key(item):
-
-    return item.get(
-        "published_date",
-        ""
-    )
-
-
-all_announcements.sort(
-    key=sort_key,
-    reverse=True
-)
-
-
-# ============================================================
+# =========================================================
 # SAVE JSON
-# ============================================================
+# =========================================================
 
 with open(
     JSON_FILE,
@@ -318,16 +240,16 @@ with open(
 ) as f:
 
     json.dump(
-        all_announcements,
+        announcements,
         f,
         ensure_ascii=False,
         indent=2
     )
 
 
-# ============================================================
+# =========================================================
 # SAVE CSV
-# ============================================================
+# =========================================================
 
 fieldnames = [
 
@@ -365,64 +287,23 @@ with open(
 
     writer.writeheader()
 
-    for item in all_announcements:
-
-        writer.writerow({
-
-            field: item.get(
-                field,
-                ""
-            )
-
-            for field in fieldnames
-
-        })
+    writer.writerows(
+        announcements
+    )
 
 
-# ============================================================
-# SUMMARY
-# ============================================================
+print(f"Saved JSON: {JSON_FILE}")
 
-print("\n========================================")
-
-print("BSE COLLECTION COMPLETE")
-
-print("========================================")
-
-print(
-    f"Existing records: "
-    f"{len(existing_announcements)}"
-)
-
-print(
-    f"New records: "
-    f"{len(new_announcements)}"
-)
-
-print(
-    f"Total records: "
-    f"{len(all_announcements)}"
-)
-
-print(
-    f"\nSaved JSON: "
-    f"{JSON_FILE}"
-)
-
-print(
-    f"Saved CSV: "
-    f"{CSV_FILE}"
-)
+print(f"Saved CSV: {CSV_FILE}")
 
 
-# ============================================================
-# SAMPLE
-# ============================================================
+# =========================================================
+# SAMPLE OUTPUT
+# =========================================================
 
 print("\nSample announcements:")
 
-
-for item in all_announcements[:5]:
+for item in announcements[:10]:
 
     print("--------------------------------")
 
@@ -449,9 +330,4 @@ for item in all_announcements[:5]:
     print(
         "URL:",
         item["url"]
-    )
-
-    print(
-        "Raw text:",
-        item["raw_text"][:300]
     )
