@@ -5,11 +5,9 @@ on:
 
 jobs:
   collect-bse:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -26,7 +24,7 @@ jobs:
         run: |
           python bse_collector.py
 
-           - name: Save BSE data
+      - name: Save BSE data
         run: |
           git config user.name "research-bot"
           git config user.email "actions@github.com"
