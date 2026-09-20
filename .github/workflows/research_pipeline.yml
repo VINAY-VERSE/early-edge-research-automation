@@ -26,8 +26,10 @@ jobs:
         run: |
           python bse_collector.py
 
-      - name: Upload BSE data
-        uses: actions/upload-artifact@v4
-        with:
-          name: bse-announcements
-          path: data/
+           - name: Save BSE data
+        run: |
+          git config user.name "research-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "Update BSE announcements"
+          git push
