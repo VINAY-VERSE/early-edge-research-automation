@@ -3,6 +3,9 @@ name: Early Edge Research Pipeline
 on:
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   collect-bse:
     runs-on: ubuntu-latest
