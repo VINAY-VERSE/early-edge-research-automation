@@ -39,6 +39,10 @@ jobs:
         run: |
           python research_priority.py
 
+      - name: Build research queue
+        run: |
+          python research_queue.py
+
       - name: Save research data
         run: |
           git config user.name "research-bot"
